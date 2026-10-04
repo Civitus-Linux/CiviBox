@@ -1,0 +1,4 @@
+.config
+etc/commands.c
+include/config.h
+test/
