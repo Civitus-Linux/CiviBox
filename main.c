@@ -12,7 +12,6 @@
 #include "include/config.h"
 #include "include/common.h"
 #include <string.h>
-
 char *version = "0.0.1";
 
 void usage() {

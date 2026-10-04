@@ -3,7 +3,20 @@ CFLAGS = -Wall -Wextra -O2
 
 TARGET = civibox
 
-COMMANDS ?= cat
+COMMANDS := $(shell \
+	if [ -f .config ]; then \
+		for file in informationes/*.c; do \
+			[ -f "$$file" ] || continue; \
+			cmd=$$(basename "$$file" .c); \
+			key=$$(printf '%s' "$$cmd" | tr '[:lower:]' '[:upper:]'); \
+			grep -qx "CONFIG_$$key=y" .config && printf '%s ' "$$cmd"; \
+		done; \
+	else \
+		for file in informationes/*.c; do \
+			[ -f "$$file" ] && printf '%s ' "$$(basename "$$file" .c)"; \
+		done; \
+	fi)
+CONFIG_FILE := $(wildcard .config)
 
 SRC = main.c etc/common.c
 
@@ -11,10 +24,10 @@ $(foreach cmd,$(COMMANDS),$(eval SRC += informationes/$(cmd).c))
 
 .PHONY: all clean menuconfig
 
-all: config.h
+all: include/config.h
 	$(CC) $(CFLAGS) $(SRC) -o $(TARGET)
 
-config.h:
+include/config.h: $(CONFIG_FILE) $(wildcard informationes/*.c)
 	@echo "#ifndef CONFIG_H" > ./include/config.h
 	@echo "#define CONFIG_H" >> ./include/config.h
 	@echo "" >> ./include/config.h

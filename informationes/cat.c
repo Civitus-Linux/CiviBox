@@ -22,9 +22,9 @@
 
 static void usage(void)
 {
-    printf("cat [OPTION] [FILE]\n");
-    printf("-n Numbers all lines\n");
-    printf("-u Does not use buffer at output\n");
+    xwrite("cat [OPTION] [FILE]\n");
+    xwrite(" -n Numbers all lines");
+    xwrite(" -u Does not use buffer at output");
 };
 
 int cat_cmd(int argc, char **argv)
