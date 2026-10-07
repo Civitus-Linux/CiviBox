@@ -22,14 +22,20 @@
 #include <unistd.h>
 #include <stdio.h>
 
-int getArg(int argc, char **argv, const char *arg)
+char *getArg(int argc, char **argv, const char *arg, int value)
 {
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], arg) == 0)
-            return 1;
+    for (int i = 1; i < argc; i++)
+    {
+        if (strcmp(argv[i], arg) != 0)
+            continue;
+
+        if (value && i + 1 < argc)
+            return argv[i + 1];
+
+        return (char *)1;
     }
 
-    return 0;
+    return NULL;
 }
 
 int xwrite(const char *format, ...)

@@ -33,11 +33,9 @@ int main(int argc, char **argv)
 
     for (int i = 0; commands[i].name != NULL; i++)
     {
-        if (strcmp(argv[1], commands[i].name) == 0)
-        {
-            return commands[i].func(argc - 1, argv + 1);
-        }
+        if (strcmp(argv[1], commands[i].name) == 0) return commands[i].func(argc - 1, argv + 1);
     }
 
+    usage();
     return 1;
 }

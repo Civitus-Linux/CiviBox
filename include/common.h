@@ -25,7 +25,7 @@ struct command {
 };
 
 // ETC
-int getArg(int argc, char **argv, const char *arg);
+char *getArg(int argc, char **argv, const char *arg, int value);
 int xwrite(const char *format, ...);
 int xputchar(char c);
 

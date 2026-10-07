@@ -26,7 +26,7 @@
 #include <errno.h>
 #include <stdio.h>
 
-static int i;
+static char *i;
 
 static void usage(void) {
   xwrite("cp [OPTION] SOURCE... DIRECTORY\n");
@@ -172,9 +172,9 @@ int cp_cmd(int argc, char ** argv) {
     return 1;
   }
 
-  int f = getArg(argc, argv, "-f");
-  i = getArg(argc, argv, "-i");
-  int r = getArg(argc, argv, "-r");
+  char *f = getArg(argc, argv, "-f", 0);
+  i = getArg(argc, argv, "-i", 0);
+  char *r = getArg(argc, argv, "-r", 0);
 
   const char * from = argv[argc - 2];
   const char * to = argv[argc - 1];

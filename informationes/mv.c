@@ -61,8 +61,8 @@ int mv_cmd(int argc, char **argv)
     const char *src = NULL;
     const char *dest = NULL;
 
-    int i = getArg(argc, argv, "-i");
-    int f = getArg(argc, argv, "-f");
+    char *i = getArg(argc, argv, "-i", 0);
+    char *f = getArg(argc, argv, "-f", 0);
 
     for (int j = 1; j < argc; j++)
     {

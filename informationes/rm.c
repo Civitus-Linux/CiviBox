@@ -23,7 +23,8 @@
 #include <stdio.h>
 #include <errno.h>
 
-int r, f;
+char *f;
+int r;
 
 static void usage(void)
 {
@@ -87,9 +88,9 @@ int rm_cmd(int argc, char **argv)
 
     const char *file = NULL;
 
-    int i = getArg(argc, argv, "-i");
-    f = getArg(argc, argv, "-f");
-    r = getArg(argc, argv, "-r") || getArg(argc, argv, "-R");
+    char *i = getArg(argc, argv, "-i", 0);
+    f = getArg(argc, argv, "-f", 0);
+    r = getArg(argc, argv, "-r", 0) || getArg(argc, argv, "-R", 0);
 
     for (int j = 1; j < argc; j++)
     {

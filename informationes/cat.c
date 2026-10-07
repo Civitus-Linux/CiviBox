@@ -35,8 +35,8 @@ int cat_cmd(int argc, char **argv)
         return 0;
     }
 
-    int n = getArg(argc, argv, "-n");
-    int u = getArg(argc, argv, "-u");
+    char *n = getArg(argc, argv, "-n", 0);
+    char *u = getArg(argc, argv, "-u", 0);
 
     if (u)
         setbuf(stdout, NULL);
