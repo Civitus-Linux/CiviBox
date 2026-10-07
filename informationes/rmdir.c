@@ -18,30 +18,28 @@
  */
 
 #include "../include/common.h"
-#include <sys/stat.h>
-#include <stdlib.h>
 #include <limits.h>
-#include <string.h>
+#include <unistd.h>
 #include <errno.h>
 #include <stdio.h>
+#include <string.h>
 
 static void usage(void)
 {
-    xwrite("mkdir [OPTION] DIRECTORY");
-    xwrite(" -m mode  set folder mode bits");
-    xwrite(" -p       create parent directories as needed");
+    xwrite("rmdir [OPTION] DIRECTORY");
+    xwrite(" -p       remove parent directories as needed");
 }
 
-static int mkkdir(const char *folder, mode_t mode, char *p)
+static int rmdirr(const char *folder, char *p)
 {
     char path[PATH_MAX];
     char *slash;
 
     if (!p)
     {
-        if (mkdir(folder, mode) < 0)
+        if (rmdir(folder) < 0)
         {
-            perror("mkdir");
+            perror("rmdir");
             return 1;
         }
 
@@ -50,68 +48,50 @@ static int mkkdir(const char *folder, mode_t mode, char *p)
 
     if (strlen(folder) >= sizeof(path))
     {
-        xwrite("mkdir: path too long");
+        xwrite("rmdir: path too long");
         return 1;
     }
 
     strcpy(path, folder);
 
-    for (slash = path + 1; *slash; slash++)
+    if (rmdir(path) < 0)
     {
-        if (*slash != '/')
-            continue;
-
-        *slash = '\0';
-
-        if (*path && mkdir(path, mode) < 0 && errno != EEXIST)
-        {
-            perror("mkdir");
-            return 1;
-        }
-
-        *slash = '/';
+        perror("rmdir");
+        return 1;
     }
 
-    if (mkdir(path, mode) < 0 && errno != EEXIST)
+    for (slash = strrchr(path, '/'); slash; slash = strrchr(path, '/'))
     {
-        perror("mkdir");
-        return 1;
+        *slash = '\0';
+
+        if (!*path)
+            break;
+
+        if (rmdir(path) < 0)
+            break;
     }
 
     return 0;
 }
 
-int mkdir_cmd(int argc, char **argv)
+int rmdir_cmd(int argc, char **argv)
 {
     if (argc == 1)
     {
         usage();
-        return 0;
+        return 1;
     }
 
     const char *folder = NULL;
-    mode_t mode = 0777;
-    char *p = getArg(argc, argv, "-p", 1);
+    char *p = getArg(argc, argv, "-p", 0);
 
     for (int j = 1; j < argc; j++)
     {
-        if (strcmp(argv[j], "-m") == 0)
-        {
-            if (j + 1 >= argc)
-            {
-                xwrite("mkdir: option requires an argument -- m");
-                return 1;
-            }
-
-            mode = strtol(argv[++j], NULL, 8);
-            continue;
-        }
-
         if (argv[j][0] == '-')
             continue;
 
-        if (folder == NULL)
-            folder = argv[j];
+        folder = argv[j];
+        break;
     }
 
     if (folder == NULL)
@@ -120,5 +100,5 @@ int mkdir_cmd(int argc, char **argv)
         return 1;
     }
 
-    return mkkdir(folder, mode, p);
+    return rmdirr(folder, p);
 }

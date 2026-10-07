@@ -23,9 +23,6 @@
 #include <stdio.h>
 #include <errno.h>
 
-char *f;
-int r;
-
 static void usage(void)
 {
     xwrite("mv [OPTION] SOURCE... DIRECTORY\n");
@@ -46,7 +43,7 @@ static int ask(const char *file)
     return answer[0] == 'y' || answer[0] == 'Y';
 }
 
-static int rm(const char *file)
+static int rm(const char *file, char *f, int r)
 {
     struct stat st;
 
@@ -89,8 +86,8 @@ int rm_cmd(int argc, char **argv)
     const char *file = NULL;
 
     char *i = getArg(argc, argv, "-i", 0);
-    f = getArg(argc, argv, "-f", 0);
-    r = getArg(argc, argv, "-r", 0) || getArg(argc, argv, "-R", 0);
+    char *f = getArg(argc, argv, "-f", 0);
+    int r = getArg(argc, argv, "-r", 0) || getArg(argc, argv, "-R", 0);
 
     for (int j = 1; j < argc; j++)
     {
@@ -113,5 +110,5 @@ int rm_cmd(int argc, char **argv)
             return 0;
     };
 
-    return rm(file);
+    return rm(file, f, r);
 }

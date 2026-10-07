@@ -26,8 +26,6 @@
 #include <errno.h>
 #include <stdio.h>
 
-static char *i;
-
 static void usage(void) {
   xwrite("cp [OPTION] SOURCE... DIRECTORY\n");
   xwrite(" -f remove destination before copying");
@@ -46,8 +44,7 @@ static int ask(const char * file) {
   return answer[0] == 'y' || answer[0] == 'Y';
 }
 
-static int cpfile(const char * to,
-  const char * from) {
+static int cpfile(const char * to, const char * from, char *i) {
   int fd_to;
   int fd_from;
 
@@ -107,8 +104,7 @@ static int cpfile(const char * to,
   return nread == 0 ? 0 : 1;
 }
 
-static int cpdir(const char * to,
-  const char * from) {
+static int cpdir(const char * to, const char * from, char *i) {
   DIR * dir;
   struct dirent * entry;
 
@@ -149,12 +145,12 @@ static int cpdir(const char * to,
     }
 
     if (S_ISDIR(st.st_mode)) {
-      if (cpdir(dst, src) != 0) {
+      if (cpdir(dst, src, i) != 0) {
         closedir(dir);
         return 1;
       }
     } else {
-      if (cpfile(dst, src) != 0) {
+      if (cpfile(dst, src, i) != 0) {
         closedir(dir);
         return 1;
       }
@@ -173,7 +169,7 @@ int cp_cmd(int argc, char ** argv) {
   }
 
   char *f = getArg(argc, argv, "-f", 0);
-  i = getArg(argc, argv, "-i", 0);
+  char *i = getArg(argc, argv, "-i", 0);
   char *r = getArg(argc, argv, "-r", 0);
 
   const char * from = argv[argc - 2];
@@ -199,7 +195,7 @@ int cp_cmd(int argc, char ** argv) {
       }
     }
 
-    return cpdir(to, from);
+    return cpdir(to, from, i);
   }
 
   if (f) {
@@ -209,10 +205,8 @@ int cp_cmd(int argc, char ** argv) {
     }
   }
 
-  if (cpfile(to, from) != 0) {
-    xwrite("cp: cannot copy '%s' to '%s'\n",
-      from,
-      to);
+  if (cpfile(to, from, i) != 0) {
+    xwrite("cp: cannot copy '%s' to '%s'\n", from, to);
 
     return 1;
   }
