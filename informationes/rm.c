@@ -18,21 +18,26 @@
  */
 
 #include "../include/common.h"
+#include <sys/stat.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <errno.h>
+
+int r, f;
 
 static void usage(void)
 {
     xwrite("mv [OPTION] SOURCE... DIRECTORY\n");
-    xwrite(" -f overwrite without asking");
-    xwrite(" -i ask before overwriting");
+    xwrite(" -f ignore files missing and don't ask");
+    xwrite(" -i ask withouth deleting");
+    xwrite(" -r[-R] remove directory recursively");
 };
 
-static int ask(const char *dest, const char *src)
+static int ask(const char *file)
 {
     char answer[8];
 
-    xwrite("mv: overwrite %s with %s? (y/n) [n] ", dest, src);
+    xwrite("rm: delete %s? (y/n) [n] ", file);
 
     if (fgets(answer, sizeof(answer), stdin) == NULL)
         return 0;
@@ -40,52 +45,72 @@ static int ask(const char *dest, const char *src)
     return answer[0] == 'y' || answer[0] == 'Y';
 }
 
-static int mv(const char *dest, const char *src) {
-    if (rename(src, dest) != 0) {
-        perror("mv");
+static int rm(const char *file)
+{
+    struct stat st;
+
+    if (stat(file, &st) < 0) {
+        if (f && errno == ENOENT)
+            return 0;
+
+        perror("rm");
         return 1;
+    }
+
+    if (S_ISDIR(st.st_mode)) {
+        if (!r) {
+            xwrite("rm: %s: is a directory", file);
+            return 1;
+        }
+
+        if (rmdir(file) < 0) {
+            perror("rm");
+            return 1;
+        }
+    } else {
+        if (unlink(file) < 0) {
+            perror("rm");
+            return 1;
+        }
     }
 
     return 0;
 }
 
-
-int mv_cmd(int argc, char **argv)
+int rm_cmd(int argc, char **argv)
 {
-    if (argc < 3)
+    if (argc < 2)
     {
         usage();
         return 0;
     }
 
-    const char *src = NULL;
-    const char *dest = NULL;
+    const char *file = NULL;
 
     int i = getArg(argc, argv, "-i");
-    int f = getArg(argc, argv, "-f");
+    f = getArg(argc, argv, "-f");
+    r = getArg(argc, argv, "-r") || getArg(argc, argv, "-R");
 
     for (int j = 1; j < argc; j++)
     {
         if (argv[j][0] == '-')
             continue;
 
-        if (src == NULL)
-            src = argv[j];
-        else
-        {
-            dest = argv[j];
-            break;
-        }
+        if (file == NULL)
+            file = argv[j];
     }
 
-    if (src == NULL || dest == NULL) {
+    if (file == NULL)
+    {
         usage();
         return 1;
     }
 
-    if (i && !f && access(dest, F_OK) == 0) {
-        if (!ask(dest, src)) return 0;
+    if (i && !f && access(file, F_OK) == 0)
+    {
+        if (!ask(file))
+            return 0;
     };
 
-    return mv(dest, src);
+    return rm(file);
 }
