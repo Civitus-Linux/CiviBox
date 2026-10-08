@@ -26,6 +26,8 @@ struct command {
 
 // ETC
 char *getArg(int argc, char **argv, const char *arg, int value);
+void xwrite_raw(const char *str, int width);
+void xwritenb(const char *format, ...);
 int xwrite(const char *format, ...);
 int xputchar(char c);
 

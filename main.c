@@ -18,10 +18,10 @@ void usage() {
     xwrite("CiviBox - v%s", version);
     xwrite("Licensed under GPL-2.0-or-later, this software is open sourced");
     xwrite("Usage: civibox [command] [args]");
-    xwrite("[");
+    xwritenb("[");
     for (int i = 0; commands[i].name != NULL; i++)
-        xwrite("  %s,", commands[i].name);
-    xwrite("]");
+        xwritenb("  %s,", commands[i].name);
+    xwrite(" ]");
 };
 
 int main(int argc, char **argv)

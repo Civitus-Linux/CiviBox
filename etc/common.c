@@ -60,6 +60,47 @@ int xwrite(const char *format, ...)
     return write(STDOUT_FILENO, buffer, len);
 }
 
+void xwritecolu(const char *str, int width)
+{
+    int len = strlen(str);
+
+    fwrite(str, 1, len, stdout);
+
+    for (int i = len; i < width; i++)
+        fputc(' ', stdout);
+}
+
+void xwrite_raw(const char *str, int width)
+{
+    int len = strlen(str);
+
+    write(STDOUT_FILENO, str, len);
+
+    for (int i = len; i < width; i++)
+        write(STDOUT_FILENO, " ", 1);
+}
+
+/* XWrite no break */
+int xwritenb(const char *format, ...)
+{
+    char buffer[4096];
+
+    va_list args;
+    va_start(args, format);
+
+    int len = vsnprintf(buffer,
+                        sizeof(buffer) - 1,
+                        format,
+                        args);
+
+    va_end(args);
+
+    if (len < 0)
+        return -1;
+
+    return write(STDOUT_FILENO, buffer, len);
+}
+
 int xputchar(char c)
 {
     return write(STDOUT_FILENO, &c, 1);
