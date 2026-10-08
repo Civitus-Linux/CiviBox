@@ -25,9 +25,9 @@
 static void usage(void)
 {
     xwrite("pwd [OPTION]\n");
-    xwrite("-L Use the logical path");
-    xwrite("-P Use the physical path");
-    xwrite("-h Show this");
+    xwrite(" -L Use the logical path");
+    xwrite(" -P Use the physical path");
+    xwrite(" -h Show this");
 };
 
 int pwd_cmd(int argc, char **argv)
