@@ -35,7 +35,7 @@ struct ls_entry
     struct stat st;
 };
 
-struct ls_options
+struct options
 {
     int a;
     int A;
@@ -101,7 +101,7 @@ static int valid_option(const char *arg)
     return 1;
 }
 
-static int ls(const char *folder, struct ls_options *opt)
+static int ls(const char *folder, struct options *opt)
 {
     DIR *dir;
     struct dirent *entry;
@@ -350,7 +350,7 @@ int ls_cmd(int argc, char **argv)
         }
     }
 
-    struct ls_options opt = {
+    struct options opt = {
         .a = getArg(argc, argv, "-a", 0) != NULL,
         .A = getArg(argc, argv, "-A", 0) != NULL,
         .C = getArg(argc, argv, "-C", 0) != NULL,
