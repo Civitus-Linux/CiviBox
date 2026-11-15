@@ -18,6 +18,7 @@
  */
 
 #include "../include/common.h"
+#include "../include/usage.h"
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <limits.h>

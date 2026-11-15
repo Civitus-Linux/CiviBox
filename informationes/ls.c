@@ -18,7 +18,7 @@
  */
 
 #include "../include/common.h"
-
+#include "../include/usage.h"
 #include <dirent.h>
 #include <limits.h>
 #include <stdio.h>

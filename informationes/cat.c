@@ -19,6 +19,7 @@
 
 #include "../include/common.h"
 #include <stdio.h>
+#include "../include/usage.h"
 
 static void usage(void)
 {

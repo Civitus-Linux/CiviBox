@@ -18,6 +18,7 @@
  */
 
 #include "../include/common.h"
+#include "../include/usage.h"
 #include <limits.h>
 #include <unistd.h>
 #include <errno.h>
