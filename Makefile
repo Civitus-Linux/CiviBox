@@ -17,6 +17,11 @@ COMMANDS := $(shell \
 		done; \
 	fi)
 CONFIG_FILE := $(wildcard .config)
+STATIC_CONFIG := $(shell grep -qx 'CONFIG_COMPILE_STATIC=y' .config 2>/dev/null && echo y)
+
+ifeq ($(STATIC_CONFIG),y)
+    CFLAGS += -static
+endif
 
 SRC = main.c etc/common.c
 
