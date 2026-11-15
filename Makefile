@@ -1,10 +1,10 @@
-
 CC = gcc
 CFLAGS = -Wall -Wextra -O2
 LDFLAGS =
 LDLIBS =
 
-TARGET = civibox
+BUILD_DIR = build
+TARGET = $(BUILD_DIR)/civibox
 CONFIG_FILE = .config
 
 STATIC_CONFIG := $(shell grep -qx 'CONFIG_COMPILE_STATIC=y' $(CONFIG_FILE) 2>/dev/null && echo y)
@@ -33,9 +33,8 @@ EXTRA_SOURCES := $(shell \
 		fi; \
 	done)
 
-COMMAND_SOURCES = $(NORMAL_SOURCES) $(EXTRA_SOURCES)
-SRC = main.c etc/common.c $(COMMAND_SOURCES)
-OBJ = $(SRC:.c=.o)
+SRC = main.c etc/common.c $(NORMAL_SOURCES) $(EXTRA_SOURCES)
+OBJ = $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRC))
 
 ifneq ($(strip $(EXTRA_SOURCES)),)
 BUILD_INFO = using extra commands
@@ -43,9 +42,11 @@ else
 BUILD_INFO = using standard commands
 endif
 
-.PHONY: all build link config menuconfig clean distclean FORCE
+.PHONY: all build config menuconfig clean distclean FORCE
 
 all: build
+
+FORCE:
 
 include/config.h: FORCE $(COMMAND_SOURCES)
 	@mkdir -p include
@@ -54,12 +55,14 @@ include/config.h: FORCE $(COMMAND_SOURCES)
 		echo '#define CONFIG_H'; \
 		echo '#include <stddef.h>'; \
 		echo '#include "common.h"'; \
-		for src in $(COMMAND_SOURCES); do \
+		for src in $(SRC); do \
+			case "$$src" in main.c|etc/common.c) continue ;; esac; \
 			cmd=$$(basename "$$src" .c); \
 			echo "int $${cmd}_cmd(int argc, char **argv);"; \
 		done; \
 		echo 'static const struct command commands[] = {'; \
-		for src in $(COMMAND_SOURCES); do \
+		for src in $(SRC); do \
+			case "$$src" in main.c|etc/common.c) continue ;; esac; \
 			cmd=$$(basename "$$src" .c); \
 			echo "    { \"$$cmd\", $${cmd}_cmd },"; \
 		done; \
@@ -71,12 +74,14 @@ include/config.h: FORCE $(COMMAND_SOURCES)
 	@rm -f include/config.h.tmp
 
 build: include/config.h
+	@mkdir -p $(BUILD_DIR)
 	@printf "Compiling CiviBox (%s)\n" "$(BUILD_INFO)"
 	@set -e; \
 	( \
 		set -e; \
 		for src in $(SRC); do \
-			obj=$${src%.c}.o; \
+			obj="$(BUILD_DIR)/$${src%.c}.o"; \
+			mkdir -p "$$(dirname "$$obj")"; \
 			$(CC) $(CFLAGS) -c "$$src" -o "$$obj"; \
 		done \
 	) & \
@@ -85,30 +90,26 @@ build: include/config.h
 		sleep 1; \
 		kill -0 $$pid 2>/dev/null && printf "."; \
 	done; \
-	wait $$pid || { printf "\n"; echo "failed"; exit 1; }; \
+	wait $$pid || { printf "\n"; exit 1; }; \
 	printf "\n"; \
-	$(MAKE) --no-print-directory link
-
-link:
-	@$(CC) $(OBJ) $(LDFLAGS) $(LDLIBS) -o $(TARGET) || exit 1
-	@echo "ok"
+	$(CC) $(OBJ) $(LDFLAGS) $(LDLIBS) -o $(TARGET) || exit 1; \
+	echo "ok"
 
 menuconfig:
+	@mkdir -p $(BUILD_DIR)
 	@bash scripts/gen.sh
-	@$(CC) $(CFLAGS) config/menuconfig.c -lncurses -o menuconfig
-	@./menuconfig
-	@rm -f menuconfig
+	@$(CC) $(CFLAGS) config/menuconfig.c -lncurses -o $(BUILD_DIR)/menuconfig
+	@./$(BUILD_DIR)/menuconfig
+	@rm -f $(BUILD_DIR)/menuconfig
 
 config: menuconfig
 
 clean:
-	@find . -name '*.o' -delete
-	@rm -f $(TARGET) menuconfig include/config.h include/config.h.tmp
+	@rm -rf $(BUILD_DIR)
+	@rm -f include/config.h include/config.h.tmp
+	@rm */*.o
 	@echo "ok"
 
 distclean: clean
 	@rm -f $(CONFIG_FILE) etc/commands.c
 	@echo "ok"
-
-FORCE:
-

@@ -3,3 +3,6 @@ etc/commands.c
 include/config.h
 test/
 civibox
+build/
+*.o
+menuconfig
