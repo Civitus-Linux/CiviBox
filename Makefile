@@ -1,7 +1,19 @@
-CC = cc
+CC = gcc
+
 CFLAGS = -Wall -Wextra -O2
+LDFLAGS =
+LDLIBS =
 
 TARGET = civibox
+
+CONFIG_FILE := $(wildcard .config)
+
+STATIC_CONFIG := $(shell \
+	grep -qx 'CONFIG_COMPILE_STATIC=y' .config 2>/dev/null && echo y)
+
+ifeq ($(STATIC_CONFIG),y)
+LDFLAGS += -static
+endif
 
 COMMANDS := $(shell \
 	if [ -f .config ]; then \
@@ -16,12 +28,6 @@ COMMANDS := $(shell \
 			[ -f "$$file" ] && printf '%s ' "$$(basename "$$file" .c)"; \
 		done; \
 	fi)
-CONFIG_FILE := $(wildcard .config)
-STATIC_CONFIG := $(shell grep -qx 'CONFIG_COMPILE_STATIC=y' .config 2>/dev/null && echo y)
-
-ifeq ($(STATIC_CONFIG),y)
-    CFLAGS += -static
-endif
 
 SRC = main.c etc/common.c
 
@@ -29,41 +35,43 @@ $(foreach cmd,$(COMMANDS),$(eval SRC += informationes/$(cmd).c))
 
 .PHONY: all clean menuconfig
 
-all: include/config.h
-	$(CC) $(CFLAGS) $(SRC) -o $(TARGET)
+all: $(TARGET)
 
 include/config.h: $(CONFIG_FILE) $(wildcard informationes/*.c)
-	@echo "#ifndef CONFIG_H" > ./include/config.h
-	@echo "#define CONFIG_H" >> ./include/config.h
-	@echo "" >> ./include/config.h
-	@echo '#include <stddef.h>' >> ./include/config.h
-	@echo '#include "common.h"' >> ./include/config.h
-	@echo "" >> ./include/config.h
-
+	@mkdir -p include
+	@echo "#ifndef CONFIG_H" > include/config.h
+	@echo "#define CONFIG_H" >> include/config.h
+	@echo "" >> include/config.h
+	@echo '#include <stddef.h>' >> include/config.h
+	@echo '#include "common.h"' >> include/config.h
+	@echo "" >> include/config.h
 	@for cmd in $(COMMANDS); do \
-		echo "int $${cmd}_cmd(int argc, char **argv);" >> ./include/config.h; \
+		echo "int $${cmd}_cmd(int argc, char **argv);" >> include/config.h; \
 	done
-
-	@echo "" >> ./include/config.h
-	@echo "static const struct command commands[] = {" >> ./include/config.h
-
+	@echo "" >> include/config.h
+	@echo "static const struct command commands[] = {" >> include/config.h
 	@for cmd in $(COMMANDS); do \
-		echo '    { "'$${cmd}'", '$${cmd}'_cmd },' >> ./include/config.h; \
+		echo '    { "'$${cmd}'", '$${cmd}'_cmd },' >> include/config.h; \
 	done
+	@echo "    { NULL, NULL }" >> include/config.h
+	@echo "};" >> include/config.h
+	@echo "" >> include/config.h
+	@echo "#endif" >> include/config.h
 
-	@echo "    { NULL, NULL }" >> ./include/config.h
-	@echo "};" >> ./include/config.h
-	@echo "" >> ./include/config.h
-	@echo "#endif" >> ./include/config.h
+$(TARGET): include/config.h $(SRC)
+	$(CC) $(CFLAGS) $(SRC) $(LDFLAGS) $(LDLIBS) -o $(TARGET)
 
+# Clean generated files
 clean:
 	rm -f $(TARGET)
-	rm -f ./include/config.h
+	rm -f include/config.h
 	rm -f menuconfig
 
+# Menuconfig
 menuconfig:
 	rm -f menuconfig
 	./scripts/gen.sh
 	$(CC) $(CFLAGS) config/menuconfig.c -lncurses -o menuconfig
 	./menuconfig
 	rm -f menuconfig
+
