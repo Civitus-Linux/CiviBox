@@ -1,77 +1,114 @@
-CC = gcc
 
+CC = gcc
 CFLAGS = -Wall -Wextra -O2
 LDFLAGS =
 LDLIBS =
 
 TARGET = civibox
+CONFIG_FILE = .config
 
-CONFIG_FILE := $(wildcard .config)
-
-STATIC_CONFIG := $(shell \
-	grep -qx 'CONFIG_COMPILE_STATIC=y' .config 2>/dev/null && echo y)
+STATIC_CONFIG := $(shell grep -qx 'CONFIG_COMPILE_STATIC=y' $(CONFIG_FILE) 2>/dev/null && echo y)
 
 ifeq ($(STATIC_CONFIG),y)
 LDFLAGS += -static
 endif
 
-COMMANDS := $(shell \
-	if [ -f .config ]; then \
-		for file in informationes/*.c; do \
-			[ -f "$$file" ] || continue; \
-			cmd=$$(basename "$$file" .c); \
-			key=$$(printf '%s' "$$cmd" | tr '[:lower:]' '[:upper:]'); \
-			grep -qx "CONFIG_$$key=y" .config && printf '%s ' "$$cmd"; \
-		done; \
-	else \
-		for file in informationes/*.c; do \
-			[ -f "$$file" ] && printf '%s ' "$$(basename "$$file" .c)"; \
-		done; \
-	fi)
+NORMAL_SOURCES := $(shell \
+	for file in informationes/*.c; do \
+		[ -f "$$file" ] || continue; \
+		cmd=$$(basename "$$file" .c); \
+		key=$$(printf '%s' "$$cmd" | tr '[:lower:]' '[:upper:]'); \
+		if [ ! -f $(CONFIG_FILE) ] || grep -qx "CONFIG_$$key=y" $(CONFIG_FILE); then \
+			echo "$$file"; \
+		fi; \
+	done)
 
-SRC = main.c etc/common.c
+EXTRA_SOURCES := $(shell \
+	for file in extra/*.c; do \
+		[ -f "$$file" ] || continue; \
+		cmd=$$(basename "$$file" .c); \
+		key=$$(printf '%s' "$$cmd" | tr '[:lower:]' '[:upper:]'); \
+		if [ ! -f $(CONFIG_FILE) ] || grep -qx "CONFIG_EXTRA_$$key=y" $(CONFIG_FILE); then \
+			echo "$$file"; \
+		fi; \
+	done)
 
-$(foreach cmd,$(COMMANDS),$(eval SRC += informationes/$(cmd).c))
+COMMAND_SOURCES = $(NORMAL_SOURCES) $(EXTRA_SOURCES)
+SRC = main.c etc/common.c $(COMMAND_SOURCES)
+OBJ = $(SRC:.c=.o)
 
-.PHONY: all clean menuconfig
+ifneq ($(strip $(EXTRA_SOURCES)),)
+BUILD_INFO = using extra commands
+else
+BUILD_INFO = using standard commands
+endif
 
-all: $(TARGET)
+.PHONY: all build link config menuconfig clean distclean FORCE
 
-include/config.h: $(CONFIG_FILE) $(wildcard informationes/*.c)
+all: build
+
+include/config.h: FORCE $(COMMAND_SOURCES)
 	@mkdir -p include
-	@echo "#ifndef CONFIG_H" > include/config.h
-	@echo "#define CONFIG_H" >> include/config.h
-	@echo "" >> include/config.h
-	@echo '#include <stddef.h>' >> include/config.h
-	@echo '#include "common.h"' >> include/config.h
-	@echo "" >> include/config.h
-	@for cmd in $(COMMANDS); do \
-		echo "int $${cmd}_cmd(int argc, char **argv);" >> include/config.h; \
-	done
-	@echo "" >> include/config.h
-	@echo "static const struct command commands[] = {" >> include/config.h
-	@for cmd in $(COMMANDS); do \
-		echo '    { "'$${cmd}'", '$${cmd}'_cmd },' >> include/config.h; \
-	done
-	@echo "    { NULL, NULL }" >> include/config.h
-	@echo "};" >> include/config.h
-	@echo "" >> include/config.h
-	@echo "#endif" >> include/config.h
+	@{ \
+		echo '#ifndef CONFIG_H'; \
+		echo '#define CONFIG_H'; \
+		echo '#include <stddef.h>'; \
+		echo '#include "common.h"'; \
+		for src in $(COMMAND_SOURCES); do \
+			cmd=$$(basename "$$src" .c); \
+			echo "int $${cmd}_cmd(int argc, char **argv);"; \
+		done; \
+		echo 'static const struct command commands[] = {'; \
+		for src in $(COMMAND_SOURCES); do \
+			cmd=$$(basename "$$src" .c); \
+			echo "    { \"$$cmd\", $${cmd}_cmd },"; \
+		done; \
+		echo '    { NULL, NULL }'; \
+		echo '};'; \
+		echo '#endif'; \
+	} > include/config.h.tmp
+	@cmp -s include/config.h.tmp include/config.h || mv include/config.h.tmp include/config.h
+	@rm -f include/config.h.tmp
 
-$(TARGET): include/config.h $(SRC)
-	$(CC) $(CFLAGS) $(SRC) $(LDFLAGS) $(LDLIBS) -o $(TARGET)
+build: include/config.h
+	@printf "Compiling CiviBox (%s)\n" "$(BUILD_INFO)"
+	@set -e; \
+	( \
+		set -e; \
+		for src in $(SRC); do \
+			obj=$${src%.c}.o; \
+			$(CC) $(CFLAGS) -c "$$src" -o "$$obj"; \
+		done \
+	) & \
+	pid=$$!; \
+	while kill -0 $$pid 2>/dev/null; do \
+		sleep 1; \
+		kill -0 $$pid 2>/dev/null && printf "."; \
+	done; \
+	wait $$pid || { printf "\n"; echo "failed"; exit 1; }; \
+	printf "\n"; \
+	$(MAKE) --no-print-directory link
 
-# Clean generated files
-clean:
-	rm -f $(TARGET)
-	rm -f include/config.h
-	rm -f menuconfig
+link:
+	@$(CC) $(OBJ) $(LDFLAGS) $(LDLIBS) -o $(TARGET) || exit 1
+	@echo "ok"
 
-# Menuconfig
 menuconfig:
-	rm -f menuconfig
-	./scripts/gen.sh
-	$(CC) $(CFLAGS) config/menuconfig.c -lncurses -o menuconfig
-	./menuconfig
-	rm -f menuconfig
+	@bash scripts/gen.sh
+	@$(CC) $(CFLAGS) config/menuconfig.c -lncurses -o menuconfig
+	@./menuconfig
+	@rm -f menuconfig
+
+config: menuconfig
+
+clean:
+	@find . -name '*.o' -delete
+	@rm -f $(TARGET) menuconfig include/config.h include/config.h.tmp
+	@echo "ok"
+
+distclean: clean
+	@rm -f $(CONFIG_FILE) etc/commands.c
+	@echo "ok"
+
+FORCE:
 
