@@ -19,7 +19,7 @@
 
 #include <stdio.h>
 #include <libgen.h>
-#include "../include/usage.h"
+#include "usage.h"
 
 static void usage()
 {

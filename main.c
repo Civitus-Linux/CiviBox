@@ -12,7 +12,7 @@
 #include "include/config.h"
 #include "include/common.h"
 #include <string.h>
-char *version = "0.2.3";
+char *version = "0.2.5";
 
 void usage() {
     xwrite("CiviBox - v%s", version);

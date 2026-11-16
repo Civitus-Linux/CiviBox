@@ -17,9 +17,9 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "../include/common.h"
+#include "common.h"
 #include <stdio.h>
-#include "../include/usage.h"
+#include "usage.h"
 
 static void usage(void)
 {
@@ -60,7 +60,7 @@ int cat_cmd(int argc, char **argv)
         {
             if (start && n)
             {
-                xwrite("%d ", line++);
+                printf("%d ", line++);
                 start = 0;
             }
 

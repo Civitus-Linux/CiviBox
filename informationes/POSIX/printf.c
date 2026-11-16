@@ -17,7 +17,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "../include/common.h"
+#include "common.h"
 
 #include <stdio.h>
 #include <stdlib.h>

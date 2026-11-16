@@ -17,8 +17,8 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "../include/common.h"
-#include "../include/usage.h"
+#include "common.h"
+#include "usage.h"
 #include <limits.h>
 #include <unistd.h>
 #include <stdlib.h>

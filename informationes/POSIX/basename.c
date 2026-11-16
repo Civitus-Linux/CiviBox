@@ -20,7 +20,7 @@
 #include <stdio.h>
 #include <libgen.h>
 #include <string.h>
-#include "../include/usage.h"
+#include "usage.h"
 
 void usage()
 {
