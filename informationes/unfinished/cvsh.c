@@ -27,6 +27,53 @@
 #define INPUT_MAX 1024
 #define ARG_SIZE 64
 
+enum { NONE, SINGLE, DOUBLE };
+
+int parse(char *s, char **args)
+{
+    static char buf[INPUT_MAX];
+    size_t pos = 0;
+    int argc = 0, active = 0, quote = NONE;
+
+    for (; *s; s++) {
+        char c = *s;
+
+        if (quote == NONE && (c == '\'' || c == '"')) {
+            quote = c == '\'' ? SINGLE : DOUBLE;
+            if (!active) {
+                if (argc >= ARG_SIZE - 1) return -1;
+                args[argc++] = &buf[pos];
+                active = 1;
+            }
+        } else if ((quote == SINGLE && c == '\'') ||
+                   (quote == DOUBLE && c == '"')) {
+            quote = NONE;
+        } else if (quote == NONE && (c == ' ' || c == '\t')) {
+            if (active) {
+                buf[pos++] = '\0';
+                active = 0;
+            }
+        } else {
+            if (!active) {
+                if (argc >= ARG_SIZE - 1) return -1;
+                args[argc++] = &buf[pos];
+                active = 1;
+            }
+
+            if (pos >= sizeof(buf) - 1) return -1;
+            buf[pos++] = c;
+        }
+    }
+
+    if (quote != NONE) return -1;
+
+    if (active) buf[pos++] = '\0';
+
+    args[argc] = NULL;
+    return argc;
+}
+
+
 int cvsh_cmd()
 {
     char input[INPUT_MAX];
@@ -40,21 +87,17 @@ int cvsh_cmd()
         input[strcspn(input, "\n")] = '\0';
 
         if (input[0] == '\0') continue;
-        if (strcmp(input, "exit") == 0) break;
 
-                char *args[ARG_SIZE];
-        int argc = 0;
+        char *args[ARG_SIZE];
+        int argc = parse(input, args);
 
-        char *token = strtok(input, " \t");
-
-        while (token != NULL && argc < ARG_SIZE - 1) {
-            args[argc++] = token;
-            token = strtok(NULL, " \t");
+        if (argc < 0)
+        {
+            fprintf(stderr, "cvsh: invalid syntax\n");
+            continue;
         }
 
-        args[argc] = NULL;
-
-        if (argc == 0) continue;
+        if (!argc) continue;
 
         if (strcmp(args[0], "exit") == 0) break;
 
