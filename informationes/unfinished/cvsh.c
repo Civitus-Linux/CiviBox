@@ -120,7 +120,7 @@ int cvsh_cmd()
         if (pid == 0) {
             execvp(args[0], args);
 
-            perror("execvp");
+            perror("cvsh");
             _exit(127);
         }
         else waitpid(pid, NULL, 0);
