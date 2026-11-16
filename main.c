@@ -12,6 +12,9 @@
 #include "include/config.h"
 #include "include/common.h"
 #include <string.h>
+#include <unistd.h>
+#include <stdio.h>
+
 char *version = "0.2.5";
 
 void usage() {
@@ -26,16 +29,22 @@ void usage() {
     xwrite(" ]");
 };
 
-int main(int argc, char **argv)
-{
-    if (argc < 2) {
-        usage();
-        return 0;
+int main(int argc, char **argv) {
+    char *name = strrchr(argv[0], '/');
+    name = name ? name + 1 : argv[0];
+
+    if (!strcmp(name, "civibox")) {
+        if (argc < 2)
+            usage();
+
+        name = argv[1];
+        argc--;
+        argv++;
     }
 
-    for (int i = 0; commands[i].name != NULL; i++)
-    {
-        if (strcmp(argv[1], commands[i].name) == 0) return commands[i].func(argc - 1, argv + 1);
+    for (int i = 0; commands[i].name; i++) {
+        if (!strcmp(name, commands[i].name))
+            return commands[i].func(argc, argv);
     }
 
     usage();

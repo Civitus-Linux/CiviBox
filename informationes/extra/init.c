@@ -16,6 +16,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/types.h>
@@ -27,8 +28,8 @@ int init_cmd(int argc, char **argv)
     (void)argv;
 
     if (getpid() != 1) {
-    	fprintf(stderr, "init: must run as PID 1\n");
-    	return 1;
+        fprintf(stderr, "init: must run as PID 1\n");
+        return 1;
     }
 
     if (access("/bin/sh", X_OK) != 0) {
@@ -45,15 +46,19 @@ int init_cmd(int argc, char **argv)
 
     if (pid == 0) {
         if (access("/etc/rc", F_OK) == 0)
-            execl("/bin/sh", "sh", "/etc/rc", (char *)NULL);
+            execl("/bin/sh", "cvsh", "/etc/rc", (char *)NULL);
         else
-            execl("/bin/sh", "sh", (char *)NULL);
+            execl("/bin/sh", "cvsh", (char *)NULL);
 
-        perror("init: exec");
+        perror("init: exec /bin/sh");
         _exit(127);
     }
 
     int status;
-    waitpid(pid, &status, 0);
+    if (waitpid(pid, &status, 0) < 0) {
+        perror("init: waitpid");
+        return 1;
+    }
+
     return 0;
 }
