@@ -4,5 +4,6 @@ include/config.h
 test/
 civibox
 build/
+*/*.o
 *.o
 menuconfig

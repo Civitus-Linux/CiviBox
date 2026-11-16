@@ -12,15 +12,17 @@
 #include "include/config.h"
 #include "include/common.h"
 #include <string.h>
-char *version = "0.0.1";
+char *version = "0.2.3";
 
 void usage() {
     xwrite("CiviBox - v%s", version);
     xwrite("Licensed under GPL-2.0-or-later, this software is open sourced");
     xwrite("Usage: civibox [command] [args]");
     xwritenb("[");
-    for (int i = 0; commands[i].name != NULL; i++)
-        xwritenb("  %s,", commands[i].name);
+    for (int i = 0; commands[i].name != NULL; i++) {
+        xwritenb("  %s", commands[i].name);
+        if (commands[i+1].name != NULL) xwritenb(",");
+    }
     xwrite(" ]");
 };
 

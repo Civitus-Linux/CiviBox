@@ -107,7 +107,6 @@ config: menuconfig
 clean:
 	@rm -rf $(BUILD_DIR)
 	@rm -f include/config.h include/config.h.tmp
-	@rm */*.o
 	@echo "ok"
 
 distclean: clean
