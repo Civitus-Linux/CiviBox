@@ -1,42 +1,37 @@
 #!/bin/bash
-
 set -e
-
-mkdir -p etc
 
 {
     echo '#ifndef CIVIBOX_COMMANDS'
     echo '#define CIVIBOX_COMMANDS'
     echo ''
-
-    # Commands
-    echo 'static const char *command_list[] ='
-    echo '{'
-
-    for f in ./informationes/*.c; do
-        [ -f "$f" ] || continue
-        base="$(basename "$f" .c)"
-        echo "    \"$base\","
-    done
-
-    echo '    NULL'
+    echo 'struct menu_command {'
+    echo '    const char *category;'
+    echo '    const char *name;'
+    echo '    const char *config;'
     echo '};'
     echo ''
+    echo 'static const struct menu_command command_list[] = {'
 
-    # Extra Commands
-    echo 'static const char *extracommand_list[] ='
-    echo '{'
+    for dir in informationes/*/; do
+        [ -d "$dir" ] || continue
 
-    for f in ./extra/*.c; do
-        [ -f "$f" ] || continue
-        base="$(basename "$f" .c)"
-        echo "    \"$base\","
+        category=$(basename "$dir")
+
+        for f in "$dir"*.c; do
+            [ -f "$f" ] || continue
+
+            name=$(basename "$f" .c)
+            key=$(printf '%s_%s' "$category" "$name" |
+                  tr '[:lower:]' '[:upper:]')
+
+            printf '    {"%s", "%s", "CONFIG_%s"},\n' \
+                "$category" "$name" "$key"
+        done
     done
 
-    echo '    NULL'
+    echo '    {NULL, NULL, NULL}'
     echo '};'
     echo ''
-
     echo '#endif'
-
 } > ./etc/commands.c

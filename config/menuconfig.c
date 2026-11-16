@@ -1,141 +1,280 @@
-
 /*
  * CiviBox - Minimal userspace toolkit for Linux
  *
  * Copyright (C) 2026 Pietro Carlini
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ * it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation, either version 2
+ * of the License, or (at your option) any later version.
  */
 
 #include <ncurses.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include "../etc/commands.c"
+#include <ctype.h>
+#include <dirent.h>
+#include <limits.h>
 
 #define CONFIG_FILE ".config"
-#define MAX_COMMANDS 256
+#define INFORMATIONES_DIR "informationes"
 
-enum {
-    MENU_MAIN,
-    MENU_COMPILE,
-    MENU_COMMANDS,
-    MENU_EXTRA
+#define MAX_COMMANDS 512
+#define MAX_CATEGORIES 64
+#define MAX_NAME 128
+#define MAX_CONFIG 256
+
+struct command
+{
+    char category[MAX_NAME];
+    char name[MAX_NAME];
+    char config[MAX_CONFIG];
+    int enabled;
 };
 
-struct config {
+struct config
+{
     int compile_static;
-    int commands[MAX_COMMANDS];
-    int extra[MAX_COMMANDS];
 };
+
+static struct command commands[MAX_COMMANDS];
+static int commands_total;
+
+static char categories[MAX_CATEGORIES][MAX_NAME];
+static int categories_total;
 
 static struct config cfg;
 
-static const char *const *command_lists[] = {
-    command_list,
-    extracommand_list
-};
-
-static int *config_lists[] = {
-    cfg.commands,
-    cfg.extra
-};
-
-static const char *menu_names[] = {
-    "Commands",
-    "Commands (Extra)"
-};
-
-static int command_count(int menu)
+static int compare_strings(const void *a, const void *b)
 {
-    int count = 0;
-
-    while (count < MAX_COMMANDS &&
-           command_lists[menu][count])
-        count++;
-
-    return count;
+    return strcmp((const char *)a, (const char *)b);
 }
 
-static void config_name(char *buf, size_t size,
-                        const char *command, int extra)
+static void make_config_name(char *buffer,
+                             size_t size,
+                             const char *category,
+                             const char *command)
 {
-    const char *prefix = extra ? "CONFIG_EXTRA_" : "CONFIG_";
-    size_t i = 0;
+    size_t pos = 0;
 
-    while (*prefix && i + 1 < size)
-        buf[i++] = *prefix++;
+    if (size == 0)
+        return;
 
-    while (*command && i + 1 < size) {
-        char c = *command++;
+    pos += (size_t)snprintf(buffer, size, "CONFIG_");
 
-        if (c >= 'a' && c <= 'z')
-            c -= 32;
+    const char *parts[] = { category, command };
 
-        buf[i++] = c;
+    for (int p = 0; p < 2 && pos < size - 1; p++)
+    {
+        if (p == 1)
+        {
+            buffer[pos++] = '_';
+            if (pos >= size - 1)
+                break;
+        }
+
+        for (size_t i = 0;
+             parts[p][i] && pos < size - 1;
+             i++)
+        {
+            unsigned char c = (unsigned char)parts[p][i];
+
+            if (isalnum(c))
+                buffer[pos++] = (char)toupper(c);
+            else
+                buffer[pos++] = '_';
+        }
     }
 
-    buf[i] = '\0';
+    buffer[pos] = '\0';
+}
+
+static int is_c_file(const char *name)
+{
+    size_t len = strlen(name);
+
+    return len > 2 &&
+           strcmp(name + len - 2, ".c") == 0;
+}
+
+static int category_exists(const char *name)
+{
+    for (int i = 0; i < categories_total; i++)
+    {
+        if (strcmp(categories[i], name) == 0)
+            return 1;
+    }
+
+    return 0;
+}
+
+static void discover_commands(void)
+{
+    DIR *root = opendir(INFORMATIONES_DIR);
+
+    if (!root)
+        return;
+
+    struct dirent *entry;
+
+    while ((entry = readdir(root)) != NULL)
+    {
+        if (entry->d_name[0] == '.')
+            continue;
+
+        if (categories_total >= MAX_CATEGORIES)
+            break;
+
+        char path[PATH_MAX];
+
+        snprintf(path, sizeof(path),
+                 "%s/%s",
+                 INFORMATIONES_DIR,
+                 entry->d_name);
+
+        DIR *directory = opendir(path);
+
+        if (!directory)
+            continue;
+
+        if (!category_exists(entry->d_name))
+        {
+            snprintf(categories[categories_total],
+                     sizeof(categories[0]),
+                     "%s",
+                     entry->d_name);
+
+            categories_total++;
+        }
+
+        struct dirent *file;
+
+        while ((file = readdir(directory)) != NULL)
+        {
+            if (!is_c_file(file->d_name))
+                continue;
+
+            if (commands_total >= MAX_COMMANDS)
+                break;
+
+            struct command *cmd = &commands[commands_total];
+
+            snprintf(cmd->category,
+                     sizeof(cmd->category),
+                     "%s",
+                     entry->d_name);
+
+            size_t len = strlen(file->d_name) - 2;
+
+            if (len >= sizeof(cmd->name))
+                continue;
+
+            memcpy(cmd->name, file->d_name, len);
+            cmd->name[len] = '\0';
+
+            make_config_name(cmd->config,
+                             sizeof(cmd->config),
+                             cmd->category,
+                             cmd->name);
+
+            cmd->enabled = 1;
+
+            commands_total++;
+        }
+
+        closedir(directory);
+    }
+
+    closedir(root);
+
+    qsort(categories,
+          (size_t)categories_total,
+          sizeof(categories[0]),
+          compare_strings);
+
+    for (int i = 0; i < commands_total; i++)
+    {
+        for (int j = i + 1; j < commands_total; j++)
+        {
+            int cmp = strcmp(commands[i].category,
+                             commands[j].category);
+
+            if (cmp > 0 ||
+                (cmp == 0 &&
+                 strcmp(commands[i].name,
+                        commands[j].name) > 0))
+            {
+                struct command tmp = commands[i];
+                commands[i] = commands[j];
+                commands[j] = tmp;
+            }
+        }
+    }
 }
 
 static void load_config(void)
 {
     FILE *file = fopen(CONFIG_FILE, "r");
 
-    if (!file) {
-        cfg.compile_static = 1;
+    cfg.compile_static = 1;
 
-        for (int m = 0; m < 2; m++)
-            for (int i = 0; i < command_count(m); i++)
-                config_lists[m][i] = 1;
+    if (!file)
+    {
+        for (int i = 0; i < commands_total; i++)
+            commands[i].enabled = 1;
 
         return;
     }
 
-    char line[256];
+    for (int i = 0; i < commands_total; i++)
+        commands[i].enabled = 0;
 
-    while (fgets(line, sizeof(line), file)) {
-        if (!strncmp(line, "CONFIG_COMPILE_STATIC=y", 23)) {
+    char line[512];
+
+    while (fgets(line, sizeof(line), file))
+    {
+        if (strncmp(line,
+                    "CONFIG_COMPILE_STATIC=y",
+                    23) == 0)
+        {
             cfg.compile_static = 1;
             continue;
         }
 
-        for (int m = 0; m < 2; m++) {
-            int count = command_count(m);
+        if (strncmp(line,
+                    "CONFIG_COMPILE_STATIC=n",
+                    23) == 0)
+        {
+            cfg.compile_static = 0;
+            continue;
+        }
 
-            for (int i = 0; i < count; i++) {
-                char name[160];
-                char value[180];
+        for (int i = 0; i < commands_total; i++)
+        {
+            char enabled[MAX_CONFIG + 8];
+            char disabled[MAX_CONFIG + 32];
 
-                config_name(name, sizeof(name),
-                            command_lists[m][i], m == 1);
+            snprintf(enabled,
+                     sizeof(enabled),
+                     "%s=y",
+                     commands[i].config);
 
-                snprintf(value, sizeof(value), "%s=y", name);
+            snprintf(disabled,
+                     sizeof(disabled),
+                     "# %s is not set",
+                     commands[i].config);
 
-                if (!strncmp(line, value, strlen(value))) {
-                    config_lists[m][i] = 1;
-                    break;
-                }
+            if (strncmp(line, enabled, strlen(enabled)) == 0)
+            {
+                commands[i].enabled = 1;
+                break;
+            }
 
-                snprintf(value, sizeof(value),
-                         "# %s is not set", name);
-
-                if (!strncmp(line, value, strlen(value))) {
-                    config_lists[m][i] = 0;
-                    break;
-                }
+            if (strncmp(line, disabled, strlen(disabled)) == 0)
+            {
+                commands[i].enabled = 0;
+                break;
             }
         }
     }
@@ -151,257 +290,425 @@ static void save_config(void)
         return;
 
     fprintf(file,
-        "#\n"
-        "# CiviBox configuration\n"
-        "# Automatically generated by menuconfig\n"
-        "#\n\n");
+            "#\n"
+            "# CiviBox configuration\n"
+            "# Automatically generated by menuconfig\n"
+            "#\n\n");
 
-    fprintf(file, "CONFIG_COMPILE_STATIC=%c\n\n",
+    fprintf(file,
+            "CONFIG_COMPILE_STATIC=%c\n\n",
             cfg.compile_static ? 'y' : 'n');
 
-    for (int m = 0; m < 2; m++) {
-        int count = command_count(m);
-
-        for (int i = 0; i < count; i++) {
-            char name[160];
-
-            config_name(name, sizeof(name),
-                        command_lists[m][i], m == 1);
-
-            if (config_lists[m][i])
-                fprintf(file, "%s=y\n", name);
-            else
-                fprintf(file, "# %s is not set\n", name);
+    for (int i = 0; i < commands_total; i++)
+    {
+        if (commands[i].enabled)
+        {
+            fprintf(file,
+                    "%s=y\n",
+                    commands[i].config);
         }
-
-        fprintf(file, "\n");
+        else
+        {
+            fprintf(file,
+                    "# %s is not set\n",
+                    commands[i].config);
+        }
     }
 
     fclose(file);
 }
 
-static void header(const char *title)
+static void draw_header(const char *title)
 {
     attron(COLOR_PAIR(1) | A_BOLD);
+
     mvhline(0, 0, ' ', COLS);
-    mvprintw(0, (COLS - (int)strlen(title)) / 2, "%s", title);
+
+    int x = (COLS - (int)strlen(title)) / 2;
+
+    if (x < 0)
+        x = 0;
+
+    mvprintw(0, x, "%s", title);
+
     attroff(COLOR_PAIR(1) | A_BOLD);
 }
 
-static void footer(void)
+static void draw_footer(void)
 {
+    int row = LINES - 2;
+
     attron(COLOR_PAIR(1));
-    mvhline(LINES - 2, 0, ' ', COLS);
-    mvhline(LINES - 1, 0, ' ', COLS);
 
-    mvprintw(LINES - 2, 2,
-             "<Enter> Select  <Space> Toggle  <Esc> Back");
+    mvhline(row, 0, ' ', COLS);
+    mvhline(row + 1, 0, ' ', COLS);
 
-    mvprintw(LINES - 1, 2,
-             "<S> Save  <Q> Quit");
+    mvprintw(row, 2,
+             "<Enter> Select   <Space> Toggle   <Esc> Back");
+
+    mvprintw(row + 1, 2,
+             "<S> Save         <Q> Quit");
 
     attroff(COLOR_PAIR(1));
 }
 
-static void item(int row, int selected, const char *text)
+static void draw_item(int row,
+                      int selected,
+                      const char *text)
 {
-    attron(selected ? COLOR_PAIR(2) | A_BOLD : COLOR_PAIR(1));
+    if (row < 1 || row >= LINES - 2)
+        return;
+
+    if (selected)
+        attron(COLOR_PAIR(2) | A_BOLD);
+    else
+        attron(COLOR_PAIR(1));
 
     mvhline(row, 0, ' ', COLS);
+
     mvprintw(row, 3, "%s", text);
 
-    attroff(selected ? COLOR_PAIR(2) | A_BOLD : COLOR_PAIR(1));
+    if (selected)
+        attroff(COLOR_PAIR(2) | A_BOLD);
+    else
+        attroff(COLOR_PAIR(1));
+}
+
+static int category_command_count(const char *category)
+{
+    int count = 0;
+
+    for (int i = 0; i < commands_total; i++)
+    {
+        if (strcmp(commands[i].category, category) == 0)
+            count++;
+    }
+
+    return count;
+}
+
+static int category_command_index(const char *category,
+                                  int position)
+{
+    for (int i = 0; i < commands_total; i++)
+    {
+        if (strcmp(commands[i].category, category) == 0)
+        {
+            if (position == 0)
+                return i;
+
+            position--;
+        }
+    }
+
+    return -1;
 }
 
 static void compile_menu(void)
 {
     int running = 1;
 
-    while (running) {
+    while (running)
+    {
         erase();
-        header("Compile settings");
+
+        draw_header("Compile settings");
 
         char text[128];
 
-        snprintf(text, sizeof(text), "[%c] COMPILE_STATIC",
+        snprintf(text,
+                 sizeof(text),
+                 "[%c] COMPILE_STATIC",
                  cfg.compile_static ? '*' : ' ');
 
-        item(3, 1, text);
-        footer();
+        draw_item(3, 1, text);
+
+        draw_footer();
         refresh();
 
-        switch (getch()) {
-        case ' ':
-            cfg.compile_static = !cfg.compile_static;
-            break;
-        case 's':
-        case 'S':
-            save_config();
-            break;
-        case 27:
-        case 'q':
-        case 'Q':
-            running = 0;
-            break;
+        int key = getch();
+
+        switch (key)
+        {
+            case ' ':
+                cfg.compile_static = !cfg.compile_static;
+                break;
+
+            case 's':
+            case 'S':
+                save_config();
+                break;
+
+            case 27:
+            case 'q':
+            case 'Q':
+                running = 0;
+                break;
         }
     }
 }
 
-static void commands_menu(int menu)
+static void commands_menu(const char *category)
 {
     int selected = 0;
     int running = 1;
-    int count = command_count(menu);
 
-    if (!count)
+    int count = category_command_count(category);
+
+    if (count == 0)
         return;
 
-    while (running) {
+    while (running)
+    {
         erase();
-        header(menu_names[menu]);
+
+        char title[160];
+
+        snprintf(title,
+                 sizeof(title),
+                 "Commands (%s)",
+                 category);
+
+        draw_header(title);
 
         int visible = LINES - 7;
 
         if (visible < 1)
             visible = 1;
 
-        int start = selected >= visible
-                  ? selected - visible + 1 : 0;
+        int start = 0;
 
-        for (int i = 0; i < visible && start + i < count; i++) {
-            int index = start + i;
-            char text[160];
+        if (selected >= visible)
+            start = selected - visible + 1;
 
-            snprintf(text, sizeof(text), "[%c] %s",
-                     config_lists[menu][index] ? '*' : ' ',
-                     command_lists[menu][index]);
+        for (int i = 0;
+             i < visible && start + i < count;
+             i++)
+        {
+            int index = category_command_index(
+                category,
+                start + i
+            );
 
-            item(3 + i, selected == index, text);
+            if (index < 0)
+                continue;
+
+            char text[256];
+
+            snprintf(text,
+                     sizeof(text),
+                     "[%c] %s",
+                     commands[index].enabled ? '*' : ' ',
+                     commands[index].name);
+
+            draw_item(3 + i,
+                      selected == start + i,
+                      text);
         }
 
-        footer();
+        draw_footer();
         refresh();
 
-        switch (getch()) {
-        case KEY_UP:
-            if (selected > 0)
-                selected--;
-            break;
+        int key = getch();
 
-        case KEY_DOWN:
-            if (selected < count - 1)
-                selected++;
-            break;
+        switch (key)
+        {
+            case KEY_UP:
+                if (selected > 0)
+                    selected--;
+                break;
 
-        case KEY_NPAGE:
-            selected += visible;
-            if (selected >= count)
-                selected = count - 1;
-            break;
+            case KEY_DOWN:
+                if (selected < count - 1)
+                    selected++;
+                break;
 
-        case KEY_PPAGE:
-            selected -= visible;
-            if (selected < 0)
+            case KEY_NPAGE:
+                selected += visible;
+
+                if (selected >= count)
+                    selected = count - 1;
+                break;
+
+            case KEY_PPAGE:
+                selected -= visible;
+
+                if (selected < 0)
+                    selected = 0;
+                break;
+
+            case KEY_HOME:
                 selected = 0;
-            break;
+                break;
 
-        case KEY_HOME:
-            selected = 0;
-            break;
+            case KEY_END:
+                selected = count - 1;
+                break;
 
-        case KEY_END:
-            selected = count - 1;
-            break;
+            case ' ':
+            {
+                int index = category_command_index(
+                    category,
+                    selected
+                );
 
-        case ' ':
-            config_lists[menu][selected] =
-                !config_lists[menu][selected];
-            break;
+                if (index >= 0)
+                    commands[index].enabled =
+                        !commands[index].enabled;
 
-        case 's':
-        case 'S':
-            save_config();
-            break;
+                break;
+            }
 
-        case 27:
-        case 'q':
-        case 'Q':
-            running = 0;
-            break;
+            case 's':
+            case 'S':
+                save_config();
+                break;
+
+            case 27:
+            case 'q':
+            case 'Q':
+                running = 0;
+                break;
         }
     }
 }
 
 static void main_menu(void)
 {
-    const char *items[] = {
-        "Compile settings  --->",
-        "Commands          --->",
-        "Commands (Extra)  --->"
-    };
-
     int selected = 0;
     int running = 1;
 
-    while (running) {
+    int count = categories_total + 1;
+
+    while (running)
+    {
         erase();
-        header("CiviBox Configuration");
 
-        for (int i = 0; i < 3; i++)
-            item(3 + i, selected == i, items[i]);
+        draw_header("CiviBox Configuration");
 
-        footer();
+        int visible = LINES - 7;
+
+        if (visible < 1)
+            visible = 1;
+
+        int start = 0;
+
+        if (selected >= visible)
+            start = selected - visible + 1;
+
+        for (int i = 0;
+             i < visible && start + i < count;
+             i++)
+        {
+            int index = start + i;
+
+            char text[160];
+
+            if (index == 0)
+            {
+                snprintf(text,
+                         sizeof(text),
+                         "Compile settings  --->");
+            }
+            else
+            {
+                snprintf(text,
+                         sizeof(text),
+                         "Commands (%s)  --->",
+                         categories[index - 1]);
+            }
+
+            draw_item(3 + i,
+                      selected == index,
+                      text);
+        }
+
+        draw_footer();
         refresh();
 
-        switch (getch()) {
-        case KEY_UP:
-            if (selected > 0)
-                selected--;
-            break;
+        int key = getch();
 
-        case KEY_DOWN:
-            if (selected < 2)
-                selected++;
-            break;
+        switch (key)
+        {
+            case KEY_UP:
+                if (selected > 0)
+                    selected--;
+                break;
 
-        case '\n':
-        case KEY_ENTER:
-            if (selected == 0)
-                compile_menu();
-            else
-                commands_menu(selected - 1);
-            break;
+            case KEY_DOWN:
+                if (selected < count - 1)
+                    selected++;
+                break;
 
-        case 's':
-        case 'S':
-            save_config();
-            break;
+            case KEY_NPAGE:
+                selected += visible;
 
-        case 27:
-        case 'q':
-        case 'Q':
-            running = 0;
-            break;
+                if (selected >= count)
+                    selected = count - 1;
+                break;
+
+            case KEY_PPAGE:
+                selected -= visible;
+
+                if (selected < 0)
+                    selected = 0;
+                break;
+
+            case KEY_HOME:
+                selected = 0;
+                break;
+
+            case KEY_END:
+                selected = count - 1;
+                break;
+
+            case '\n':
+            case KEY_ENTER:
+                if (selected == 0)
+                {
+                    compile_menu();
+                }
+                else if (selected > 0)
+                {
+                    commands_menu(categories[selected - 1]);
+                }
+                break;
+
+            case 's':
+            case 'S':
+                save_config();
+                break;
+
+            case 27:
+            case 'q':
+            case 'Q':
+                running = 0;
+                break;
         }
     }
 }
 
 int main(void)
 {
+    discover_commands();
     load_config();
 
     initscr();
 
-    if (has_colors()) {
+    if (has_colors())
+    {
         start_color();
+
         init_pair(1, COLOR_WHITE, COLOR_BLUE);
         init_pair(2, COLOR_BLUE, COLOR_WHITE);
+
         bkgd(COLOR_PAIR(1));
     }
 
     cbreak();
     noecho();
     keypad(stdscr, TRUE);
+
     curs_set(0);
 
     main_menu();
