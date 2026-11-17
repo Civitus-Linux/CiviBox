@@ -40,18 +40,17 @@ int redirect_output(char **args)
 			if (args[i+1] == NULL) return -1;
 
 			fd = open(args[i+1], O_WRONLY | O_CREAT | (append ? O_APPEND : O_TRUNC), 0644);
-
-            if (fd < 0) return -1;
-            if (dup2(fd, STDOUT_FILENO) < 0) 
-            {
-                close(fd);
-                return -1;
-            }
-
-            close(fd);
-            args[i] = NULL;
-            return 0;
+            		if (fd < 0) return -1;
+            		if (dup2(fd, STDOUT_FILENO) < 0) 
+            		{
+                		close(fd);
+                		return -1;
+           		}
+            		close(fd);
+            		args[i] = NULL;
+            		return 0;
 		}
+	return 0;
 }
 
 int parse(char *s, char **args)

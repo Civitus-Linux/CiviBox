@@ -1,8 +1,10 @@
 #include <stdio.h>
 #include <dirent.h>
+#include <fnmatch.h>
 #include <sys/stat.h>
 #include <string.h>
 #include <limits.h>
+#include "../../include/common.h"
 
 static void usage()
 {
@@ -20,7 +22,7 @@ static void usage()
     puts("    -empty              Match empty files or directories");
 }
 
-int find(const char *path)
+int find(const char *path, const char *pattern)
 {
     DIR *dir = opendir(path);
     if (dir == NULL) {
@@ -36,13 +38,11 @@ int find(const char *path)
     while ((entry = readdir(dir)) != NULL) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
         snprintf(fullpath, sizeof(fullpath), "%s/%s", path, entry->d_name);
-
         if (lstat(fullpath, &st) == -1) continue;
-
-        printf("%s\n", fullpath);
+        if (pattern == NULL || fnmatch(pattern, entry->d_name, 0) == 0) printf("%s\n", fullpath);
 
         if (S_ISDIR(st.st_mode)) {
-            find(fullpath);
+            find(fullpath, pattern);
         }
     }
 
@@ -57,6 +57,8 @@ int find_cmd(int argc, char *argv[])
         return 1;
     }
 
-    find(argv[1]);
-    return 0;
+    const char *name = getArg(argc, argv, "-name", 1);
+    const char *path = (argv[1][0] == '-') ? "." : argv[1];
+
+    return find(path, name == (char *)1 ? NULL : name);
 }
