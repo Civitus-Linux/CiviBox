@@ -18,6 +18,7 @@
  */
 
 #include <stdio.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -28,6 +29,30 @@
 #define ARG_SIZE 64
 
 enum { NONE, SINGLE, DOUBLE };
+
+int redirect_output(char **args)
+{
+	int fd, append = 0;
+	for (int i=0; args[i] != NULL; i++)
+		if (!strcmp(args[i], ">") || !strcmp(args[i], ">>"))
+		{
+			append = !strcmp(args[i], ">>");
+			if (args[i+1] == NULL) return -1;
+
+			fd = open(args[i+1], O_WRONLY | O_CREAT | (append ? O_APPEND : O_TRUNC), 0644);
+
+            if (fd < 0) return -1;
+            if (dup2(fd, STDOUT_FILENO) < 0) 
+            {
+                close(fd);
+                return -1;
+            }
+
+            close(fd);
+            args[i] = NULL;
+            return 0;
+		}
+}
 
 int parse(char *s, char **args)
 {
@@ -118,6 +143,7 @@ int cvsh_cmd()
         }
 
         if (pid == 0) {
+            if (redirect_output(args) < 0) _exit(1);
             execvp(args[0], args);
 
             perror("cvsh");
