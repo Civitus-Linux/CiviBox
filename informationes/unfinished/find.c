@@ -15,12 +15,30 @@ static void usage(void)
     puts("");
     puts("    -name PATTERN       Match filename");
     puts("    -iname PATTERN      Match filename, ignoring case");
-    puts("    -type TYPE          Filter by type (f, d)");
+    puts("    -type TYPE          Filter by type (f, d, l, b, c, p, s)");
     puts("    -maxdepth N         Limit directory depth");
     puts("    -mindepth N         Set minimum directory depth");
     puts("    -print              Print matching paths");
     puts("    -delete             Delete matching entries");
     puts("    -empty              Match empty files or directories");
+}
+
+int match_type(const char *path, char type)
+{
+    struct stat st;
+    if (lstat(path, &st) == -1) return 0;
+
+    switch (type)
+    {
+        case 'f': return S_ISREG(st.st_mode);
+        case 'd': return S_ISDIR(st.st_mode);
+        case 'l': return S_ISLNK(st.st_mode);
+        case 'b': return S_ISBLK(st.st_mode);
+        case 'c': return S_ISCHR(st.st_mode);
+        case 'p': return S_ISFIFO(st.st_mode);
+        case 's': return S_ISSOCK(st.st_mode);
+        default: return -1;
+    }
 }
 
 int fm_case(const char *pattern, const char *string)
@@ -41,7 +59,7 @@ int fm_case(const char *pattern, const char *string)
     return fnmatch(p, s, 0);
 }
 
-int find(const char *path, const char *pattern, int flags)
+int find(const char *path, const char *pattern, int flags, char type)
 {
     DIR *dir = opendir(path);
     if (dir == NULL) {
@@ -58,14 +76,17 @@ int find(const char *path, const char *pattern, int flags)
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
         snprintf(fullpath, sizeof(fullpath), "%s/%s", path, entry->d_name);
         if (lstat(fullpath, &st) == -1) continue;
-	int matched = 1;
+	    int matched = 1;
 
-	if (pattern != NULL) matched = fnmatch(pattern, entry->d_name, flags) == 0;
+	    if (pattern != NULL) matched = fnmatch(pattern, entry->d_name, flags) == 0;
 
-	if (matched) printf("%s\n", fullpath);
+	    if (matched)
+        {
+            if (type == '\0' || match_type(fullpath, type) == 1) printf("%s\n", fullpath);
+        }
 
         if (S_ISDIR(st.st_mode)) {
-            find(fullpath, pattern, flags);
+            find(fullpath, pattern, flags, type);
         }
     }
 
@@ -82,10 +103,25 @@ int find_cmd(int argc, char *argv[])
 
     const char *name = getArg(argc, argv, "-name", 1);
     const char *iname = getArg(argc, argv, "-iname", 1);
-    
+    const char *type_arg = getArg(argc, argv, "-type", 1);
+
     const char *pattern = name ? name : iname;
     int flags = iname ? FNM_CASEFOLD : 0;
     const char *path = (argv[1][0] == '-') ? "." : argv[1];
+    char type = '\0';
 
-    return find(path, pattern, flags);
+    if (type_arg != NULL) {
+        if (type_arg == (char *)1 || type_arg[1] != '\0') {
+            fprintf(stderr, "find: invalid argument for -type\n");
+            return 1;
+        }
+
+        type = type_arg[0];
+        if (match_type(".", type) == -1) {
+            fprintf(stderr, "find: invalid type '%c'\n", type);
+            return 1;
+        }
+    }
+
+    return find(path, pattern, flags, type);
 }
