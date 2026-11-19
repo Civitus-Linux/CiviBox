@@ -7,7 +7,7 @@
 #include <limits.h>
 #include "../../include/common.h"
 
-static void usage()
+static void usage(void)
 {
     puts("Usage: find [PATH...] [EXPRESSION]");
     puts("");
@@ -58,7 +58,11 @@ int find(const char *path, const char *pattern, int flags)
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
         snprintf(fullpath, sizeof(fullpath), "%s/%s", path, entry->d_name);
         if (lstat(fullpath, &st) == -1) continue;
-        if (pattern == NULL || flags ? fm_case(pattern, entry->d_name) : fnmatch(pattern, entry->d_name, flags) == 0) printf("%s\n", fullpath);
+	int matched = 1;
+
+	if (pattern != NULL) matched = fnmatch(pattern, entry->d_name, flags) == 0;
+
+	if (matched) printf("%s\n", fullpath);
 
         if (S_ISDIR(st.st_mode)) {
             find(fullpath, pattern, flags);

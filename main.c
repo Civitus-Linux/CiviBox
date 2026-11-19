@@ -15,7 +15,7 @@
 #include <unistd.h>
 #include <stdio.h>
 
-char *version = "0.2.5";
+char *version = "0.3.3";
 
 void usage() {
     xwrite("CiviBox - v%s", version);
@@ -35,7 +35,10 @@ int main(int argc, char **argv) {
 
     if (!strcmp(name, "civibox")) {
         if (argc < 2)
+        {
             usage();
+            return 1;
+        }
 
         name = argv[1];
         argc--;

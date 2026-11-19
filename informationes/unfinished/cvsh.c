@@ -98,8 +98,10 @@ int parse(char *s, char **args)
 }
 
 
-int cvsh_cmd()
+int cvsh_cmd(int argc, char **argv)
 {
+    (void)argc;
+    (void)argv;
     char input[INPUT_MAX];
 
     while (1)

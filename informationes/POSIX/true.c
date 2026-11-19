@@ -17,4 +17,4 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-int true_cmd() {return 0;};
+int true_cmd(int argc, char **argv) { (void)argc; (void)argv; return 0;};

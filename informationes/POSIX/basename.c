@@ -22,7 +22,7 @@
 #include <string.h>
 #include "usage.h"
 
-void usage()
+static void usage()
 {
     puts("Usage: basename STRING [SUFFIX]\n");
     puts("	-h	Show this help message");
