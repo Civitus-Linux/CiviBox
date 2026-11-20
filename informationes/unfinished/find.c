@@ -62,7 +62,7 @@ int fm_case(const char *pattern, const char *string)
     return fnmatch(p, s, 0);
 }
 
-int find(const char *path, const char *pattern, int flags, char type, int depth, int maxdepth)
+int find(const char *path, const char *pattern, int flags, char type, int depth, int maxdepth, int mindepth)
 {
     DIR *dir = opendir(path);
     if (dir == NULL) {
@@ -70,13 +70,19 @@ int find(const char *path, const char *pattern, int flags, char type, int depth,
         return 1;
     }
 
+    if (depth >= maxdepth)
+    {
+        closedir(dir);
+        return 0;
+    }
 
+
+    int result = 0;
     struct dirent *entry;
     struct stat st;
     char fullpath[PATH_MAX];
 
     while ((entry = readdir(dir)) != NULL) {
-        if (depth >= maxdepth) return 0;
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
         snprintf(fullpath, sizeof(fullpath), "%s/%s", path, entry->d_name);
         if (lstat(fullpath, &st) == -1) continue;
@@ -84,18 +90,15 @@ int find(const char *path, const char *pattern, int flags, char type, int depth,
 
 	    if (pattern != NULL) matched = fnmatch(pattern, entry->d_name, flags) == 0;
 
-	    if (matched)
-        {
-            if (type == '\0' || match_type(fullpath, type) == 1) printf("%s\n", fullpath);
-        }
+        int current_depth = depth + 1;
 
-        if (S_ISDIR(st.st_mode)) {
-            find(fullpath, pattern, flags, type, depth, maxdepth);
-        }
+        if (current_depth >= mindepth && matched && (type == '\0' || match_type(fullpath, type) == 1)) printf("%s\n", fullpath);
+
+        if (S_ISDIR(st.st_mode) && find(fullpath, pattern, flags, type, current_depth, maxdepth, mindepth) != 0) result = 1;
     }
 
     closedir(dir);
-    return 0;
+    return result;
 }
 
 int find_cmd(int argc, char *argv[])
@@ -109,31 +112,52 @@ int find_cmd(int argc, char *argv[])
     const char *iname = getArg(argc, argv, "-iname", 1);
     const char *type_arg = getArg(argc, argv, "-type", 1);
     char *maxdepth_arg = getArg(argc, argv, "-maxdepth", 1);
-    int maxdepth = INT_MAX;
+    char *mindepth_arg = getArg(argc, argv, "-mindepth", 1);
+    int maxdepth = INT_MAX, mindepth = 0;
 
     const char *pattern = name ? name : iname;
     int flags = iname ? FNM_CASEFOLD : 0;
     const char *path = (argv[1][0] == '-') ? "." : argv[1];
     char type = '\0';
 
-
     if (maxdepth_arg == (char *)1) {
-        fprintf(stderr, "find: missing argument for -maxdepth\n");
-        return 1;
+    	fprintf(stderr, "find: missing argument\n");
+    	return 1;
     }
 
-    if (maxdepth_arg != NULL)
-    {
-        char *end;
-        errno = 0;
-        long value = strtol(maxdepth_arg, &end, 10);
-        
-        if (errno != 0 || end == maxdepth_arg || *end != '\0' || value < 0 || value > INT_MAX)
-        {
-            fprintf(stderr, "find: invalid maxdepth\n");
-            return 1;
-        }
-        maxdepth = (int)value;
+    if (mindepth_arg == (char *)1) {
+        fprintf(stderr, "find: missing argument\n");
+        return 1;
+    }
+	
+    if (maxdepth_arg != NULL) {
+    	char *end;
+    	long value = strtol(maxdepth_arg, &end, 10);
+
+    	if (end == maxdepth_arg || *end != '\0' || value < 0 || value > INT_MAX) {
+        	fprintf(stderr, "find: invalid maxdepth\n");
+        	return 1;
+    	}
+
+    	maxdepth = (int)value;
+    }
+
+    if (mindepth_arg != NULL) {
+    	char *end;
+    	errno = 0;
+    	long value = strtol(mindepth_arg, &end, 10);
+
+    	if (errno != 0 || end == mindepth_arg || *end != '\0' || value < 0 || value > INT_MAX) {
+        	fprintf(stderr, "find: invalid mindepth\n");
+        	return 1;
+    	}
+
+    	mindepth = (int)value;
+    }
+
+    if (mindepth > maxdepth) {
+    	fprintf(stderr, "find: mindepth is greater than maxdepth\n");
+    	return 1;
     }
 
     if (type_arg != NULL) {
@@ -149,5 +173,5 @@ int find_cmd(int argc, char *argv[])
         }
     }
 
-    return find(path, pattern, flags, type, 0, maxdepth);
+    return find(path, pattern, flags, type, 0, maxdepth, mindepth);
 }
