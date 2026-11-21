@@ -20,6 +20,8 @@
 #define _DEFAULT_SOURCE
 
 #include <stdio.h>
+#include <fcntl.h>
+#include <errno.h>
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h>
@@ -27,7 +29,6 @@
 
 #include <sys/socket.h>
 #include <sys/ioctl.h>
-#include <sys/random.h>
 #include <sys/time.h>
 
 #include <net/if.h>
@@ -200,6 +201,37 @@ static int receive_packet(int sock, uint8_t xid[4], struct dhcp_packet *p, size_
     }
 }
 
+ssize_t getrand(void *buf, size_t len)
+{
+    int fd = open("/dev/urandom", O_RDONLY);
+    if (fd < 0)
+        return -1;
+
+    ssize_t n = 0;
+
+    while ((size_t)n < len) {
+        ssize_t r = read(fd, (char *)buf + n, len - n);
+
+        if (r < 0) {
+            if (errno == EINTR)
+                continue;
+
+            close(fd);
+            return -1;
+        }
+
+        if (r == 0) {
+            close(fd);
+            errno = EIO;
+            return -1;
+        }
+
+        n += r;
+    }
+
+    close(fd);
+    return n;
+}
 static int dhcp_client(const char *name)
 {
     uint8_t mac[6], xid[4];
@@ -221,8 +253,8 @@ static int dhcp_client(const char *name)
         goto fail;
     }
 
-    if (rand(xid, sizeof(xid), 0) != sizeof(xid)) {
-        perror("rand");
+    if (getrand(xid, sizeof(xid)) != sizeof(xid)) {
+        perror("getrand");
         goto fail;
     }
 
