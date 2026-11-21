@@ -17,6 +17,9 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <linux/rfkill.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include "common.h"
 #include <dirent.h>
 #include <limits.h>
@@ -131,10 +134,10 @@ long requested_id = strtol(device, &end, 10);
     return result;
 }
 
-int read(const char *path, char *buf, size_t size)
+int read_f(const char *path, char *buf, size_t size)
 {
     FILE *file = fopen(path, "r");
-    
+
     if (file == NULL) return 1;
 
     if (fgets(buf, size, file) == NULL)
@@ -146,6 +149,62 @@ int read(const char *path, char *buf, size_t size)
     buf[strcspn(buf, "\n")] = '\0';
 
     fclose(file);
+    return 0;
+}
+
+int rfkill_event(void)
+{
+    int fd = open("/dev/rfkill", O_RDONLY);
+
+    if (fd < 0)
+    {
+        perror("rfkill");
+        return 1;
+    }
+
+    struct rfkill_event event;
+    ssize_t bytes;
+
+    while (1)
+    {
+        bytes = read(fd, &event, sizeof(event));
+
+        if (bytes < 0)
+        {
+            perror("rfkill");
+            close(fd);
+            return 1;
+        }
+
+        if (bytes == 0)
+            break;
+
+        if (bytes != sizeof(event))
+            continue;
+
+        switch (event.op)
+        {
+            case RFKILL_OP_ADD:
+                printf("Device added: %u\n", event.idx);
+                break;
+
+            case RFKILL_OP_DEL:
+                printf("Device removed: %u\n", event.idx);
+                break;
+
+            case RFKILL_OP_CHANGE:
+                printf("Device changed: %u\n", event.idx);
+                break;
+
+            case RFKILL_OP_CHANGE_ALL:
+                printf("All devices changed\n");
+                break;
+        }
+
+        printf("Type: %u | Soft: %u | Hard: %u\n", event.type, event.soft, event.hard);
+    }
+
+    close(fd);
     return 0;
 }
 
@@ -166,19 +225,19 @@ int rfkill_list()
         char path[PATH_MAX];
 
         snprintf(path, sizeof(path), "%s/%s/index", RFKILL_PATH, entry->d_name);
-        if (read(path, buf, sizeof(buf)) == 0) printf("%s: ", buf);
+        if (read_f(path, buf, sizeof(buf)) == 0) printf("%s: ", buf);
         
         snprintf(path, sizeof(path), "%s/%s/name", RFKILL_PATH, entry->d_name);
-	if (read(path, buf, sizeof(buf)) == 0) printf("%s: ", buf);
+	if (read_f(path, buf, sizeof(buf)) == 0) printf("%s: ", buf);
 
         snprintf(path, sizeof(path), "%s/%s/type", RFKILL_PATH, entry->d_name);
-        if (read(path, buf, sizeof(buf)) == 0) printf("%s\n", buf);
+        if (read_f(path, buf, sizeof(buf)) == 0) printf("%s\n", buf);
 
         snprintf(path, sizeof(path), "%s/%s/soft", RFKILL_PATH, entry->d_name);
-        if (read(path, buf, sizeof(buf)) == 0) printf("	Soft blocked: %s\n", atoi(buf) == 1 ? "yes" : "no");
+        if (read_f(path, buf, sizeof(buf)) == 0) printf("	Soft blocked: %s\n", atoi(buf) == 1 ? "yes" : "no");
 
         snprintf(path, sizeof(path), "%s/%s/hard", RFKILL_PATH, entry->d_name);
-        if (read(path, buf, sizeof(buf)) == 0) printf("	Hard blocked: %s\n", atoi(buf) == 1 ? "yes": "no");
+        if (read_f(path, buf, sizeof(buf)) == 0) printf("	Hard blocked: %s\n", atoi(buf) == 1 ? "yes": "no");
     }
 
     closedir(dir);
@@ -196,10 +255,11 @@ int rfkill_cmd(int argc, char **argv)
     char *list = getArg(argc, argv, "list", 0); 
     char *block = getArg(argc, argv, "block", 1);
     char *unblock = getArg(argc, argv, "unblock", 1);
-
-
+    char *event = getArg(argc, argv, "event", 0);
+ 
     if (block != NULL) return rfkill_change(block, 1);
     if (unblock != NULL) return rfkill_change(unblock, 0);
+    if (event != NULL) return rfkill_event();
     if (list != NULL) return rfkill_list();
 
     usage();
