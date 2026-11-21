@@ -221,8 +221,8 @@ static int dhcp_client(const char *name)
         goto fail;
     }
 
-    if (getrandom(xid, sizeof(xid), 0) != sizeof(xid)) {
-        perror("getrandom");
+    if (rand(xid, sizeof(xid), 0) != sizeof(xid)) {
+        perror("rand");
         goto fail;
     }
 
