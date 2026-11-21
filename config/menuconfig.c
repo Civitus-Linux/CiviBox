@@ -178,7 +178,7 @@ static void discover_commands(void)
                              cmd->category,
                              cmd->name);
 
-            cmd->enabled = 1;
+            cmd->enabled = 0;
 
             commands_total++;
         }
@@ -222,7 +222,7 @@ static void load_config(void)
     if (!file)
     {
         for (int i = 0; i < commands_total; i++)
-            commands[i].enabled = 1;
+            commands[i].enabled = 0;
 
         return;
     }
