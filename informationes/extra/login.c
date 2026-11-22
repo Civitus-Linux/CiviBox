@@ -23,8 +23,8 @@
 #include <termios.h>
 #include <unistd.h>
 #include <string.h>
-#include <shadow.h>
 #include <crypt.h>
+#include "auth/auth.h"
 #include <grp.h>
 
 #include "common.h"
@@ -51,6 +51,12 @@ int check_pass(const char *user, const char *pass)
 
 int login_cmd(void)
 {
+    if (geteuid() != 0)
+    {
+        puts("Are you root?");
+        return 1;
+    }
+    
     struct passwd *user;
     for (;;) {
         char username[256], password[256];

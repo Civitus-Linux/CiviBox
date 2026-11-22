@@ -17,11 +17,21 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <termios.h>
 #include <sys/ioctl.h>
+#include <pwd.h>
+#include <stdio.h>
+#include <termios.h>
+#include <unistd.h>
+#include <string.h>
+#include <shadow.h>
+#include <crypt.h>
+#include <grp.h>
 
 #define LEFT  1000
 #define RIGHT 1001
@@ -179,13 +189,61 @@ void draw(void)
   fflush(stdout);
 }
 
+extern char **environ;
+
+struct passwd *find_user(char *username)
+{
+    return getpwnam(username);
+}
+
+int check_pass(const char *user, const char *pass)
+{
+    struct spwd *sp;
+    char *hash;
+
+    sp = getspnam(user);
+    if (!sp || !sp->sp_pwdp || sp->sp_pwdp[0] == '!' || sp->sp_pwdp[0] == '*') return 0;
+    hash = crypt(pass, sp->sp_pwdp);
+    if (!hash) return 0;
+
+    return strcmp(hash, sp->sp_pwdp) == 0;
+}
+
 void bye(void)
 {
   tui_end();
   clear();
 
-  printf("User: %s\n", username[0] ? username : "root");
-  printf("Display Selected: %s\n", tests[selected]);
+  struct passwd *user;
+  user = find_user(username);
+
+  if (!user) return;
+  if (!user->pw_name || !user->pw_dir || !user->pw_shell || initgroups(user->pw_name, user->pw_gid) || setgid(user->pw_gid) < 0 || setuid(user->pw_uid) < 0 || chdir(user->pw_dir) < 0) return;
+
+    clearenv();
+
+    setenv("HOME", user->pw_dir, 1);
+    setenv("USER", user->pw_name, 1);
+    setenv("LOGNAME", user->pw_name, 1);
+    setenv("SHELL", user->pw_shell, 1);
+    setenv("PATH", "/usr/local/bin:/usr/bin:/bin", 1);
+
+    char *base = strrchr(user->pw_shell, '/');
+    base = base ? base + 1 : user->pw_shell;
+
+    char *argv0 = malloc(strlen(base) + 2);
+    if (!argv0) return;
+
+    sprintf(argv0, "-%s", base);
+
+    char *argv[] = {
+        argv0,
+        NULL
+c    };
+
+    execve(user->pw_shell, argv, environ);
+
+    perror("execve");
 }
 
 int udm_cmd(void)
