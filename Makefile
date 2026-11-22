@@ -2,7 +2,7 @@ CC = gcc
 
 CFLAGS = -Wall -Wextra -O2 -I$(CURDIR)/include
 LDFLAGS =
-LDLIBS =
+LDLIBS = -lcrypt
 
 TARGET = civibox
 BUILD_DIR = build
