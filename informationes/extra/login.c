@@ -31,7 +31,7 @@
 
 extern char **environ;
 
-struct passwd *find_user(char *username)
+struct passwd *find_usr(char *username)
 {
     return getpwnam(username);
 }
@@ -93,7 +93,7 @@ int login_cmd(void)
 
         if (check_pass(username, password))
         {
-            user = find_user(username);
+            user = find_usr(username);
             break;
         }
         xwrite("Login incorrect");
