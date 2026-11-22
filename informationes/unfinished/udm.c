@@ -29,8 +29,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <string.h>
-#include <shadow.h>
-#include <crypt.h>
+#include "auth/auth.h"
 #include <grp.h>
 
 #define LEFT  1000
@@ -43,6 +42,7 @@
 #define HEIGHT 11
 #define INPUT  64
 
+char message[INPUT];
 char *tests[] = {"test1", "test2"};
 int total = sizeof(tests) / sizeof(*tests);
 int selected, focus;
@@ -134,6 +134,7 @@ void text(int x, int y, const char *s, int active)
 
 void input(char *buffer, int key)
 {
+  message[0] = '\0';
   int len = strlen(buffer);
 
   if (key == BACK) {
@@ -167,6 +168,7 @@ void draw(void)
   clear();
   box(x, y);
 
+  text(x, y + 1, message, 0);
   text(x, y + 2, option, focus == 0);
   text(x, y + 4, username[0] ? username : "Username", focus == 1);
   text(x, y + 5, password[0] ? hidden : "Password", focus == 2);
@@ -196,58 +198,73 @@ struct passwd *find_user(char *username)
     return getpwnam(username);
 }
 
-int check_pass(const char *user, const char *pass)
-{
-    struct spwd *sp;
-    char *hash;
-
-    sp = getspnam(user);
-    if (!sp || !sp->sp_pwdp || sp->sp_pwdp[0] == '!' || sp->sp_pwdp[0] == '*') return 0;
-    hash = crypt(pass, sp->sp_pwdp);
-    if (!hash) return 0;
-
-    return strcmp(hash, sp->sp_pwdp) == 0;
-}
-
 void bye(void)
 {
-  tui_end();
-  clear();
+    struct passwd *user;
+    char *base, *argv0;
+    char *argv[2];
 
-  struct passwd *user;
-  user = find_user(username);
+    tui_end();    
 
-  if (!user) return;
-  if (!user->pw_name || !user->pw_dir || !user->pw_shell || initgroups(user->pw_name, user->pw_gid) || setgid(user->pw_gid) < 0 || setuid(user->pw_uid) < 0 || chdir(user->pw_dir) < 0) return;
+    user = find_user(username);
+    if (!user) {
+        fprintf(stderr, "login: user not found\n");
+        return;
+    }
 
-    clearenv();
+    if (!user->pw_name || !user->pw_dir ||
+        !user->pw_shell || !*user->pw_shell) {
+        fprintf(stderr, "login: invalid user information\n");
+        return;
+    }
 
-    setenv("HOME", user->pw_dir, 1);
-    setenv("USER", user->pw_name, 1);
-    setenv("LOGNAME", user->pw_name, 1);
-    setenv("SHELL", user->pw_shell, 1);
-    setenv("PATH", "/usr/local/bin:/usr/bin:/bin", 1);
+    if (initgroups(user->pw_name, user->pw_gid) < 0 ||
+        setgid(user->pw_gid) < 0 ||
+        setuid(user->pw_uid) < 0 ||
+        chdir(user->pw_dir) < 0) {
+        perror("login");
+        return;
+    }
 
-    char *base = strrchr(user->pw_shell, '/');
+    if (clearenv() < 0 ||
+        setenv("HOME", user->pw_dir, 1) < 0 ||
+        setenv("USER", user->pw_name, 1) < 0 ||
+        setenv("LOGNAME", user->pw_name, 1) < 0 ||
+        setenv("SHELL", user->pw_shell, 1) < 0 ||
+        setenv("PATH", "/usr/local/bin:/usr/bin:/bin", 1) < 0) {
+        perror("login: environment");
+        return;
+    }
+
+    base = strrchr(user->pw_shell, '/');
     base = base ? base + 1 : user->pw_shell;
 
-    char *argv0 = malloc(strlen(base) + 2);
-    if (!argv0) return;
+    argv0 = malloc(strlen(base) + 2);
+    if (!argv0) {
+        perror("login: malloc");
+        return;
+    }
 
     sprintf(argv0, "-%s", base);
 
-    char *argv[] = {
-        argv0,
-        NULL
-c    };
+    argv[0] = argv0;
+    argv[1] = NULL;
+    clear();
+    fflush(stdout);
 
     execve(user->pw_shell, argv, environ);
 
-    perror("execve");
+    perror("login: execve");
+    free(argv0);
 }
 
 int udm_cmd(void)
 {
+  if (geteuid() != 0)
+  {
+    puts("Are you root?");
+    return 1;
+  }
   tui_init();
 
   while (1) {
@@ -265,10 +282,23 @@ int udm_cmd(void)
 
     if (key == ENTER) {
       if (focus == 3) {
-        bye();
-        return 0;
-      }
+          int result = auth_check(username, password);
 
+          if (result == AUTH_OK) {
+            bye();
+            return 0;
+          }
+    	if (result == AUTH_DENIED) {
+           snprintf(message, sizeof(message), "Invalid login");
+           password[0] = '\0';
+           focus = 2;
+    	} else {
+           snprintf(message, sizeof(message), "Authentication error");
+           password[0] = '\0';
+           focus = 2;
+    	}
+
+      }
       focus = (focus + 1) % 4;
     }
   }
@@ -276,4 +306,3 @@ int udm_cmd(void)
   tui_end();
   return 0;
 }
-

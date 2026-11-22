@@ -17,4 +17,10 @@ struct spwd {
 
 struct spwd *getspnam(const char *name);
 
+#define AUTH_ERROR -1
+#define AUTH_DENIED 0
+#define AUTH_OK 1
+
+int auth_check(const char *username, const char *password);
+
 #endif

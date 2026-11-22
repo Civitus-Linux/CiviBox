@@ -1,6 +1,6 @@
 CC = gcc
 
-CFLAGS = -Wall -Wextra -O2 -I$(CURDIR)/include
+CFLAGS = -Wall -Wextra -O2 -I$(CURDIR)/include -I$(CURDIR)/include/auth
 LDFLAGS =
 LDLIBS = -lcrypt
 
@@ -31,7 +31,7 @@ endif
 
 COMMANDS := $(foreach file,$(COMMAND_SOURCES),$(basename $(notdir $(file))))
 
-SRC = main.c etc/common.c $(COMMAND_SOURCES)
+SRC = main.c etc/common.c include/auth/auth.c $(COMMAND_SOURCES)
 
 .PHONY: all clean menuconfig
 
