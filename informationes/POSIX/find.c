@@ -27,7 +27,9 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <limits.h>
-#include "../../include/common.h"
+#include "common.h"
+
+enum { ACT_PRINT = 1, ACT_DELETE = 2, ACT_EMPTY = 4 };
 
 static void usage(void)
 {
@@ -81,7 +83,32 @@ int fm_case(const char *pattern, const char *string)
     return fnmatch(p, s, 0);
 }
 
-int find(const char *path, const char *pattern, int flags, char type, int depth, int maxdepth, int mindepth)
+static int is_empty(const char *path, const struct stat *st)
+{
+    struct dirent *e;
+    DIR *d;
+    int r = 1;
+
+    if (S_ISREG(st->st_mode)) return st->st_size == 0;
+    if (!S_ISDIR(st->st_mode)) return 0;
+    if (!(d = opendir(path))) return 0;
+    while ((e = readdir(d)))
+        if (strcmp(e->d_name, ".") && strcmp(e->d_name, "..")) { r = 0; break; }
+    closedir(d);
+    return r;
+}
+
+static int matches(const char *fullpath, const char *name, const struct stat *st,
+                   const char *pattern, int flags, char type, int depth,
+                   int mindepth, int act)
+{
+    if (depth < mindepth) return 0;
+    if (pattern && fnmatch(pattern, name, flags)) return 0;
+    if (type && match_type(fullpath, type) != 1) return 0;
+    return !(act & ACT_EMPTY) || is_empty(fullpath, st);
+}
+
+int find(const char *path, const char *pattern, int flags, char type, int depth, int maxdepth, int mindepth, int act)
 {
     DIR *dir = opendir(path);
     if (dir == NULL) {
@@ -101,19 +128,21 @@ int find(const char *path, const char *pattern, int flags, char type, int depth,
     struct stat st;
     char fullpath[PATH_MAX];
 
-    while ((entry = readdir(dir)) != NULL) {
+   while ((entry = readdir(dir)) != NULL) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
         snprintf(fullpath, sizeof(fullpath), "%s/%s", path, entry->d_name);
         if (lstat(fullpath, &st) == -1) continue;
-	    int matched = 1;
-
-	    if (pattern != NULL) matched = fnmatch(pattern, entry->d_name, flags) == 0;
 
         int current_depth = depth + 1;
+        int hit = matches(fullpath, entry->d_name, &st, pattern, flags, type, current_depth, mindepth, act);
 
-        if (current_depth >= mindepth && matched && (type == '\0' || match_type(fullpath, type) == 1)) printf("%s\n", fullpath);
-
-        if (S_ISDIR(st.st_mode) && find(fullpath, pattern, flags, type, current_depth, maxdepth, mindepth) != 0) result = 1;
+        if (hit && (act & ACT_PRINT)) printf("%s\n", fullpath);
+        if (S_ISDIR(st.st_mode) && find(fullpath, pattern, flags, type, current_depth, maxdepth, mindepth, act)) result = 1;
+        if ((act & ACT_DELETE) && matches(fullpath, entry->d_name, &st, pattern, flags, type, current_depth, mindepth, act) && remove(fullpath) == -1)
+        {
+            perror(fullpath);
+            result = 1;
+        }
     }
 
     closedir(dir);
@@ -132,6 +161,10 @@ int find_cmd(int argc, char *argv[])
     const char *type_arg = getArg(argc, argv, "-type", 1);
     char *maxdepth_arg = getArg(argc, argv, "-maxdepth", 1);
     char *mindepth_arg = getArg(argc, argv, "-mindepth", 1);
+    char *print_arg = getArg(argc, argv, "-print", 0);
+    char *delete_arg = getArg(argc, argv, "-delete", 0);
+    char *empty_arg = getArg(argc, argv, "-empty", 0);
+    
     int maxdepth = INT_MAX, mindepth = 0;
 
     const char *pattern = name ? name : iname;
@@ -192,5 +225,11 @@ int find_cmd(int argc, char *argv[])
         }
     }
 
-    return find(path, pattern, flags, type, 0, maxdepth, mindepth);
+    int act = 0;
+    if (print_arg == (char *)1) act |= ACT_PRINT;
+    if (delete_arg == (char *)1) act |= ACT_DELETE;
+    if (empty_arg == (char *)1) act |= ACT_EMPTY;
+    if (!(act & (ACT_PRINT | ACT_DELETE))) act |= ACT_PRINT;
+
+    return find(path, pattern, flags, type, 0, maxdepth, mindepth, act);
 }
